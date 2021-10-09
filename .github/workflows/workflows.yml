@@ -1,0 +1,173 @@
+name: Molecule EC2 execution workflow
+
+on:
+  workflow_call:
+    inputs:
+      distro:
+        description: 'AWS EC2 AMI distribution name'
+        default: 'centos7'
+        required: true
+        type: string
+      python-interpreter:
+        description: 'Ansible Python interpreter'
+        default: '/usr/bin/python'
+        required: true
+        type: string
+      python-version:
+        description: 'Python version'
+        default: '3.x'
+        required: true
+        type: string
+      tag-prefix:
+        description: 'tag prefix for AWS EC2 resources'
+        required: true
+        type: string
+    secrets:
+      AMI_OWNER_ID:
+        description: 'AWS EC2 Amazon machine image owner id'
+        required: true
+      AWS_ACCESS_KEY_ID:
+        description: 'AWS access key'
+        required: true
+      AWS_DEFAULT_REGION:
+        description: 'EC2 default region'
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        description: 'AWS secret access key'
+        required: true
+      VPC_SUBNET_ID:
+        description: 'AWS VPC subnet id'
+        required: true
+
+jobs:
+  molecule-ec2:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "${{ inputs.python-version }}"
+
+      - name: Set Ansible Python interpreter
+        run: |
+          INTERPRETER=`which python`
+          echo "ANSIBLE_PYTHON_INTERPRETER=${INTERPRETER}" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        run: |
+          pip install -r molecule/requirements/vm
+          ansible-galaxy install -r molecule/vm/requirements.yml
+
+      - name: Install required Ansible Collections
+        run: |
+          ansible-galaxy collection install community.molecule
+
+      - name: Create galaxy dependencies file in 'molecule/vm/'
+        run: |
+          cp roles/requirements.yml molecule/vm/requirements.yml
+
+      - name: Set environment variables with timestamp for making sure Molecule would create unique AWS resources
+        run: |
+          TIMESTAMP=$(date --date "9 hours" "+%Y%m%d_%H%M%S")
+          echo "AWSIAM_USER=${{ inputs.tag-prefix }}_${TIMESTAMP}_${{ matrix.distro }}" >> $GITHUB_ENV
+          echo "AWSIAM_POLICY_NAME=${{ inputs.tag-prefix }}_${TIMESTAMP}_${{ matrix.distro }}" >> $GITHUB_ENV
+
+      - name: Create AWS Access Key
+        run: |
+          molecule dependency --scenario-name awsiam
+          molecule converge --scenario-name awsiam
+        env:
+          ANSIBLE_FORCE_COLOR: '1'
+          AWS_ACCESS_KEY_ID_1: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          AWS_SECRET_ACCESS_KEY_1: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # AWSIAM_USER: sotred in system environment variables
+          # AWSIAM_POLICY_NAME: sotred in system environment variables
+          MOLECULE_VERBOSITY: 0
+          PROFILE_TASKS_SORT_ORDER: 'none'
+          PROFILE_TASKS_TASK_OUTPUT_LIMIT: '200'
+          PY_COLORS: '1'
+          TZ: 'Asia/Tokyo'
+
+      - name: Set latest AMI image id to environment variables
+        run: |
+          sleep 20
+
+          AMI_ID=$(aws ec2 describe-images \
+          --owners "${{ secrets.AMI_OWNER_ID }}" \
+          --filters "Name=name,Values=${{ inputs.distro }}-1*" \
+          --query 'Images[*][CreationDate, ImageId, Name]' \
+          --output text | sort -r | awk 'NR==1 {print $2}')
+          echo "AMI_ID=${AMI_ID}" >> $GITHUB_ENV
+        env:
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+
+      - name: Set environment variables with timestamp for making sure Molecule would create unique AWS resources
+        run: |
+          TIMESTAMP=$(date --date "9 hours" "+%Y%m%d_%H:%M:%S")
+          VALUE=${{ inputs.tag-prefix }}_${{ matrix.distro }}_${TIMESTAMP}
+          echo "PLATFORM_NAME=${VALUE}" >> $GITHUB_ENV
+          echo "KEYPAIR_NAME=${VALUE}" >> $GITHUB_ENV
+          echo "SECURITY_GROUP_NAME=${VALUE}" >> $GITHUB_ENV
+          echo "TAG_NAME=${VALUE}" >> $GITHUB_ENV
+
+      - name: Set AWS resource creator name to system environment variables
+        run: |
+          author_email=$(git show -s --format='%ae' ${{ github.sha }})
+          echo "CREATED_BY=$author_email" >> $GITHUB_ENV
+
+      - name: Test with molecule
+        run: |
+          molecule test --scenario-name vm
+        env:
+          # AMI_ID: sotred in system environment variables
+          ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_PYTHON_INTERPRETER: ${{ inputs.python-interpreter }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          # CREATED_BY: sotred in system environment variables
+          # KEYPAIR_NAME: sotred in system environment variables
+          # KEYPAIR_NAME: sotred in system environment variables
+          MOLECULE_VERBOSITY: 0
+          # PLATFORM_NAME: sotred in system environment variables
+          PROFILE_TASKS_SORT_ORDER: 'none'
+          PROFILE_TASKS_TASK_OUTPUT_LIMIT: '200'
+          PY_COLORS: '1'
+          # SECURITY_GROUP_NAME: sotred in system environment variables
+          # TAG_NAME: sotred in system environment variables
+          TZ: 'Asia/Tokyo'
+          VPC_SUBNET_ID: ${{ secrets.VPC_SUBNET_ID }}
+
+      - name: Delete AWS Access Key
+        run: |
+          molecule cleanup --scenario-name awsiam
+        env:
+          ANSIBLE_FORCE_COLOR: '1'
+          AWS_ACCESS_KEY_ID_1: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          AWS_SECRET_ACCESS_KEY_1: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # AWSIAM_USER: sotred in system environment variables
+          # AWSIAM_POLICY_NAME: sotred in system environment variables
+          MOLECULE_VERBOSITY: 0
+          PROFILE_TASKS_SORT_ORDER: 'none'
+          PROFILE_TASKS_TASK_OUTPUT_LIMIT: '200'
+          PY_COLORS: '1'
+          TZ: 'Asia/Tokyo'
+
+      - name: Show Ansible version
+        run: |
+          pip list | grep ansible \
+          | GREP_COLORS='mt=01;34' egrep --color=always '[[:digit:]]' \
+          | GREP_COLORS='mt=01;34' egrep --color=always '\.' \
+          | GREP_COLORS='mt=01;33' egrep --color=always 'ansible.* '
+          ansible --version
+
+      - name: Show molecule version
+        run: |
+          molecule --version
+        env:
+          PY_COLORS: '1'
