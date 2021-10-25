@@ -8,6 +8,10 @@ on:
         default: 'centos7'
         required: true
         type: string
+      molecule-scenario:
+        description: 'Molecule scenario name.'
+        default: 'default'
+        type: string
       python-interpreter:
         description: 'Ansible Python interpreter'
         default: '/usr/bin/python'
@@ -58,18 +62,21 @@ jobs:
           INTERPRETER=`which python`
           echo "ANSIBLE_PYTHON_INTERPRETER=${INTERPRETER}" >> $GITHUB_ENV
 
-      - name: Install dependencies
+      - name: Install Pip requirements
         run: |
           pip install -r molecule/requirements/vm
-          ansible-galaxy install -r molecule/vm/requirements.yml
+
+      - name: Install dependencies
+        run: |
+          ansible-galaxy install -r molecule/${{ inputs.molecule-scenario }}/requirements.yml
 
       - name: Install required Ansible Collections
         run: |
           ansible-galaxy collection install community.molecule
 
-      - name: Create galaxy dependencies file in 'molecule/vm/'
+      - name: Create galaxy dependencies file in 'molecule/scenario-name/'
         run: |
-          cp roles/requirements.yml molecule/vm/requirements.yml
+          cp roles/requirements.yml molecule/${{ inputs.molecule-scenario }}/requirements.yml
 
       - name: Set environment variables with timestamp for making sure Molecule would create unique AWS resources
         run: |
@@ -123,7 +130,7 @@ jobs:
 
       - name: Test with molecule
         run: |
-          molecule test --scenario-name vm
+            molecule test --scenario-name ${{ inputs.molecule-scenario }}
         env:
           # AMI_ID: sotred in system environment variables
           ANSIBLE_FORCE_COLOR: '1'
