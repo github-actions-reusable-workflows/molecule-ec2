@@ -19,7 +19,6 @@ on:
       python-interpreter:
         description: 'Ansible Python interpreter'
         default: '/usr/bin/python'
-        required: true
         type: string
       python-version:
         description: 'Python version'
