@@ -23,8 +23,7 @@ on:
         type: string
       python-version:
         description: 'Python version'
-        default: '3.x'
-        required: true
+        default: 3
         type: string
       tag-prefix:
         description: 'tag prefix for AWS EC2 resources'
