@@ -12,6 +12,10 @@ on:
         description: 'Molecule scenario name.'
         default: 'default'
         type: string
+      pip-requirements-file:
+        description: 'Path of Pip requirements file'
+        default: 'molecule/requirements.txt'
+        type: string
       python-interpreter:
         description: 'Ansible Python interpreter'
         default: '/usr/bin/python'
@@ -64,7 +68,7 @@ jobs:
 
       - name: Install Pip requirements
         run: |
-          pip install -r molecule/requirements/vm
+          pip install -r ${{ inputs.pip-requirements-file }}
 
       - name: Install dependencies
         run: |
