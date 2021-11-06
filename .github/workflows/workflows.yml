@@ -103,19 +103,6 @@ jobs:
           PY_COLORS: '1'
           TZ: 'Asia/Tokyo'
 
-      - name: Set latest AMI image id to environment variables
-        run: |
-          sleep 20
-
-          AMI_ID=$(aws ec2 describe-images \
-          --owners "${{ secrets.AMI_OWNER_ID }}" \
-          --filters "Name=name,Values=${{ inputs.ami-name }}" \
-          --query 'Images[*][CreationDate, ImageId, Name]' \
-          --output text | sort -r | awk 'NR==1 {print $2}')
-          echo "AMI_ID=${AMI_ID}" >> $GITHUB_ENV
-        env:
-          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
-
       - name: Set environment variables with timestamp for making sure Molecule would create unique AWS resources
         run: |
           TIMESTAMP=$(date --date "9 hours" "+%Y%m%d_%H:%M:%S")
@@ -134,7 +121,8 @@ jobs:
         run: |
             molecule test --scenario-name ${{ inputs.molecule-scenario }}
         env:
-          # AMI_ID: sotred in system environment variables
+          AMI_NAME: ${{ inputs.ami-name }}
+          AMI_OWNER_ID: ${{ secrets.AMI_OWNER_ID }}
           ANSIBLE_FORCE_COLOR: '1'
           ANSIBLE_PYTHON_INTERPRETER: ${{ inputs.python-interpreter }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
