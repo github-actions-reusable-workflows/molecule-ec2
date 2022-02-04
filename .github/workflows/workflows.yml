@@ -8,6 +8,10 @@ on:
         default: 'centos7*'
         required: true
         type: string
+      molecule-instance-type:
+        description: 'AWS EC2 Instance types.'
+        default: 't2.micro'
+        type: string
       molecule-scenario:
         description: 'Molecule scenario name.'
         default: 'default'
@@ -127,6 +131,7 @@ jobs:
           ANSIBLE_PYTHON_INTERPRETER: ${{ inputs.python-interpreter }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
           # CREATED_BY: sotred in system environment variables
+          INSTANCE_TYPE: ${{ inputs.molecule-instance-type }}
           # KEYPAIR_NAME: sotred in system environment variables
           # KEYPAIR_NAME: sotred in system environment variables
           MOLECULE_VERBOSITY: 0
