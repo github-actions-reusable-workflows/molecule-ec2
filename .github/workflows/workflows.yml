@@ -74,7 +74,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          ansible-galaxy install -r molecule/${{ inputs.molecule-scenario }}/requirements.yml
+          if [ -e molecule/${{ inputs.molecule-scenario }}/requirements.yml ]; then
+            ansible-galaxy install -r molecule/${{ inputs.molecule-scenario }}/requirements.yml
+          else
+            echo "No requirements.yml is found."
+          fi
 
       - name: Install required Ansible Collections
         run: |
@@ -82,7 +86,11 @@ jobs:
 
       - name: Create galaxy dependencies file in 'molecule/scenario-name/'
         run: |
-          cp roles/requirements.yml molecule/${{ inputs.molecule-scenario }}/requirements.yml
+          if [ -e roles/requirements.yml ]; then
+            cp roles/requirements.yml molecule/${{ inputs.molecule-scenario }}/requirements.yml
+          else
+            echo "No requirements.yml is found."
+          fi
 
       - name: Set environment variables with timestamp for making sure Molecule would create unique AWS resources
         run: |
